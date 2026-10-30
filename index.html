@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhotoEdit Studio — Portrait Blur & Correction</title>
+<style>
+:root{--bg:#0b1020;--panel:#141c30;--panel2:#1b2740;--text:#f4f7ff;--muted:#aab5ca;--accent:#7c9cff;--line:#2b3854}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0%,#1b2b4d 0,#0b1020 45%);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{padding:22px max(18px,calc((100vw - 1120px)/2));border-bottom:1px solid #ffffff14;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-weight:800;font-size:20px;letter-spacing:.2px}.brand span{color:var(--accent)}.tag{color:var(--muted);font-size:12px}
+main{max-width:1120px;margin:28px auto;padding:0 18px 50px}.intro h1{font-size:clamp(28px,5vw,42px);line-height:1.1;margin:0 0 10px}.intro p{color:var(--muted);margin:0 0 22px}
+.layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:18px}.panel{background:#141c30ed;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 16px 40px #0003}
+.preview{min-height:360px;display:flex;align-items:center;justify-content:center;background:#080d19;border:1px dashed #43516e;border-radius:14px;overflow:hidden;position:relative}
+canvas{max-width:100%;max-height:70vh;object-fit:contain;display:block}.empty{text-align:center;padding:30px;color:var(--muted)}.empty b{display:block;color:var(--text);font-size:18px;margin:8px}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 14px;font-weight:650;cursor:pointer}.btn.primary{background:var(--accent);color:#091126;border-color:var(--accent)}.btn:disabled{opacity:.45;cursor:not-allowed}input[type=file]{display:none}
+h2{font-size:17px;margin:0 0 13px}.tabs{display:grid;grid-template-columns:1fr 1fr;background:#0b1222;padding:4px;border-radius:12px;margin-bottom:17px}.tabs button{border:0;background:transparent;color:var(--muted);padding:10px;border-radius:9px;font-weight:700;cursor:pointer}.tabs button.active{background:#293958;color:white}
+.control{margin:17px 0}.control label{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;font-weight:650}.control small,.hint{color:var(--muted);font-size:12px}.control input[type=range]{width:100%;accent-color:var(--accent)}
+select{width:100%;padding:11px;background:#0b1222;color:white;border:1px solid var(--line);border-radius:10px}
+.status{padding:10px 12px;border-radius:10px;background:#0b1222;color:var(--muted);font-size:12px;margin-top:12px;min-height:40px}.status.good{color:#a8f0c2}.status.warn{color:#ffd38a}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.check{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;margin-top:10px}.check input{accent-color:var(--accent)}
+footer{text-align:center;color:#7f8ca5;font-size:12px;padding:20px}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.preview{min-height:260px}header{padding:16px 18px}}
+</style>
+</head>
+<body>
+<header><div class="brand">✦ PhotoEdit <span>Studio</span></div><div class="tag">Portrait blur · Photo correction · HD export</div></header>
+<main>
+<section class="intro"><h1>Make every portrait stand out.</h1><p>Upload a photo, choose automatic subject blur or adjust the blur manually, then download your edit.</p></section>
+<div class="layout">
+<section class="panel">
+ <div class="preview" id="preview">
+  <div class="empty" id="empty">◎<b>Your photo preview</b>Choose a photo to start editing.</div>
+  <canvas id="canvas" hidden></canvas>
+ </div>
+ <div class="actions">
+  <label class="btn primary" for="upload">＋ Upload photo</label><input id="upload" type="file" accept="image/*">
+  <button class="btn" id="compare" disabled>Show original</button>
+  <button class="btn" id="download" disabled>Download photo</button>
+ </div>
+ <div class="hint" style="margin-top:10px">Your photo is processed in this browser. Automatic background separation needs an internet connection to load the segmentation model.</div>
+</section>
+<aside class="panel">
+ <h2>Editing controls</h2>
+ <div class="tabs"><button id="autoTab" class="active">Automatic</button><button id="manualTab">Manual</button></div>
+ <div id="autoControls">
+  <div class="control"><label for="autoBlur">Background blur <span id="autoVal">14 px</span></label><input id="autoBlur" type="range" min="0" max="30" value="14"></div>
+  <div class="control"><label for="edge">Edge softness <span id="edgeVal">3</span></label><input id="edge" type="range" min="0" max="10" value="3"></div>
+  <button class="btn primary" id="applyAuto" style="width:100%">Detect subject & apply blur</button>
+  <p class="hint">Keeps the detected person sharp and blurs the background. Results depend on lighting, pose and photo quality.</p>
+ </div>
+ <div id="manualControls" hidden>
+  <div class="control"><label for="manualBlur">Blur strength <span id="manualVal">8 px</span></label><input id="manualBlur" type="range" min="0" max="24" value="8"></div>
+  <div class="control"><label for="mode">Manual blur style</label><select id="mode"><option value="whole">Blur whole photo</option><option value="background">Soft background overlay (approx.)</option></select></div>
+  <button class="btn primary" id="applyManual" style="width:100%">Apply manual blur</button>
+  <p class="hint">Manual whole-photo blur is predictable. The approximate background style is a soft overlay, not precise person detection.</p>
+ </div>
+ <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+ <h2>Photo correction</h2>
+ <div class="control"><label for="brightness">Brightness <span id="brightVal">100%</span></label><input id="brightness" type="range" min="70" max="140" value="100"></div>
+ <div class="control"><label for="contrast">Contrast <span id="contrastVal">100%</span></label><input id="contrast" type="range" min="70" max="140" value="100"></div>
+ <div class="control"><label for="saturation">Color <span id="satVal">100%</span></label><input id="saturation" type="range" min="0" max="150" value="100"></div>
+ <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+ <h2>HDR & AI enhancement</h2>
+ <div class="control"><label for="hdr">HDR effect <span id="hdrVal">0</span></label><input id="hdr" type="range" min="0" max="100" value="0"></div>
+ <div class="row">
+   <button class="btn primary" id="autoEnhance" style="flex:1">✦ AI Auto Enhance</button>
+   <button class="btn" id="resetEnhance">Reset enhance</button>
+ </div>
+ <p class="hint">Smart auto-enhance analyzes image brightness and contrast, then applies balanced corrections. HDR is a visual effect, not true multi-exposure HDR capture.</p>
+ <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+ <h2>Photo filters</h2>
+ <div class="control"><label for="filter">Choose a filter</label><select id="filter">
+  <option value="none">Original</option><option value="vivid">Vivid</option><option value="warm">Warm</option>
+  <option value="cool">Cool</option><option value="mono">Black & White</option><option value="vintage">Vintage</option>
+  <option value="cinematic">Cinematic</option><option value="soft">Soft Portrait</option>
+ </select></div>
+ <div class="actions"><button class="btn" id="reset">Reset all edits</button></div>
+ <div class="status" id="status">Upload an image to begin.</div>
+</aside>
+</div>
+</main>
+<footer>PhotoEdit Studio · Use photos you have permission to edit.</footer>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous">
+function applyAIEnhance(){
+ if(!original){status('Upload a photo first.','warn');return;}
+ // Lightweight local image analysis: sample luminance to choose balanced correction.
+ const probe=document.createElement('canvas');probe.width=96;probe.height=96;
+ const p=probe.getContext('2d',{willReadFrequently:true});p.drawImage(original,0,0,96,96);
+ const data=p.getImageData(0,0,96,96).data;let sum=0,sumSq=0,n=0;
+ for(let i=0;i<data.length;i+=4){const y=.2126*data[i]+.7152*data[i+1]+.0722*data[i+2];sum+=y;sumSq+=y*y;n++;}
+ const mean=sum/n, variance=Math.max(0,sumSq/n-mean*mean), spread=Math.sqrt(variance);
+ const bright=Math.max(88,Math.min(118,Math.round(100+(118-mean)*.22)));
+ const contrast=Math.max(96,Math.min(125,Math.round(100+(48-spread)*.35)));
+ const sat=Math.max(100,Math.min(118,Math.round(108+(55-spread)*.12)));
+ $('brightness').value=bright;$('contrast').value=contrast;$('saturation').value=sat;$('hdr').value=22;
+ settings.brightness=bright;settings.contrast=contrast;settings.saturation=sat;
+ $('brightVal').textContent=bright+'%';$('contrastVal').textContent=contrast+'%';$('satVal').textContent=sat+'%';$('hdrVal').textContent='22';
+ $('filter').value='vivid';showingOriginal=false;$('compare').textContent='Show original';rerender();
+ status('AI-style auto enhancement applied using local image analysis.','good');
+}
+$('autoEnhance').onclick=applyAIEnhance;
+$('resetEnhance').onclick=()=>{if(!original)return;['brightness','contrast','saturation'].forEach(id=>$(id).value=100);$('hdr').value=0;$('filter').value='none';settings.brightness=settings.contrast=settings.saturation=100;['brightVal','contrastVal','satVal'].forEach(id=>$(id).textContent='100%');$('hdrVal').textContent='0';rerender();status('Enhancement and filter reset.','good');};
+$('hdr').addEventListener('input',()=>{$('hdrVal').textContent=$('hdr').value;if(!showingOriginal)rerender();});
+$('filter').addEventListener('change',()=>{if(!showingOriginal)rerender();});
+
+</script>
+<script>
+const $=id=>document.getElementById(id), canvas=$('canvas'),ctx=canvas.getContext('2d');
+let original=null, originalW=0, originalH=0, currentMode='auto', showingOriginal=false, segmentation=null, autoMask=null;
+let settings={blur:14,edge:3,brightness:100,contrast:100,saturation:100};
+function status(msg,type=''){ $('status').textContent=msg;$('status').className='status '+type; }
+function setTab(mode){currentMode=mode;$('autoTab').classList.toggle('active',mode==='auto');$('manualTab').classList.toggle('active',mode==='manual');$('autoControls').hidden=mode!=='auto';$('manualControls').hidden=mode!=='manual';}
+$('autoTab').onclick=()=>setTab('auto');$('manualTab').onclick=()=>setTab('manual');
+function fitSize(w,h){const max=1800,scale=Math.min(1,max/Math.max(w,h));return [Math.round(w*scale),Math.round(h*scale)];}
+function loadImage(file){if(!file)return;if(!file.type.startsWith('image/')){status('Please choose an image file.','warn');return;}const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{original=img;[canvas.width,canvas.height]=fitSize(img.naturalWidth,img.naturalHeight);originalW=canvas.width;originalH=canvas.height;autoMask=null;$('empty').hidden=true;canvas.hidden=false;$('download').disabled=false;$('compare').disabled=false;settings={blur:+$('autoBlur').value,edge:+$('edge').value,brightness:100,contrast:100,saturation:100};['brightness','contrast','saturation'].forEach(id=>$(id).value=100);renderOriginal();status('Photo loaded. Choose Automatic or Manual blur.','good');URL.revokeObjectURL(url);};img.onerror=()=>status('Could not open this image. Try another photo.','warn');img.src=url;}
+$('upload').addEventListener('change',e=>loadImage(e.target.files[0]));
+function renderOriginal(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.filter='none';ctx.drawImage(original,0,0,canvas.width,canvas.height);}
+function filterValues(){
+ const f=$('filter').value;
+ const map={none:[100,100,100],vivid:[105,118,135],warm:[105,108,112],cool:[101,108,108],mono:[100,112,0],vintage:[105,90,78],cinematic:[96,118,112],soft:[106,92,92]};
+ return map[f]||map.none;
+}
+function drawWithCorrection(target=ctx){
+ const [fb,fc,fs]=filterValues();
+ target.filter=`brightness(${settings.brightness*fb/100}%) contrast(${settings.contrast*fc/100}%) saturate(${settings.saturation*fs/100}%)`;
+ target.drawImage(original,0,0,canvas.width,canvas.height);target.filter='none';
+ const hdr=+$('hdr').value;
+ if(hdr>0){
+  target.save();
+  target.globalCompositeOperation='soft-light';
+  target.globalAlpha=hdr/220;
+  const grad=target.createLinearGradient(0,0,canvas.width,canvas.height);
+  grad.addColorStop(0,'#ffffff');grad.addColorStop(.48,'#777777');grad.addColorStop(1,'#111827');
+  target.fillStyle=grad;target.fillRect(0,0,canvas.width,canvas.height);
+  target.restore();
+ }
+ if($('filter').value==='vintage'||$('filter').value==='cinematic'){
+  target.save();target.globalAlpha=$('filter').value==='vintage'?.12:.08;target.fillStyle=$('filter').value==='vintage'?'#9b653b':'#10233e';target.fillRect(0,0,canvas.width,canvas.height);target.restore();
+ }
+}
+function renderManual(){if(!original)return;const blur=+$('manualBlur').value;ctx.clearRect(0,0,canvas.width,canvas.height);if($('mode').value==='whole'){ctx.filter=`blur(${blur}px) brightness(${settings.brightness}%) contrast(${settings.contrast}%) saturate(${settings.saturation}%)`;ctx.drawImage(original,0,0,canvas.width,canvas.height);ctx.filter='none';}else{drawWithCorrection();if(blur>0){ctx.save();ctx.globalAlpha=Math.min(.72,blur/35);ctx.filter=`blur(${blur}px)`;ctx.drawImage(original,0,0,canvas.width,canvas.height);ctx.restore();}}}
+function renderAuto(){if(!original)return;if(!autoMask){drawWithCorrection();return;}const blur=+$('autoBlur').value;const base=document.createElement('canvas');base.width=canvas.width;base.height=canvas.height;const b=base.getContext('2d');b.filter=`brightness(${settings.brightness}%) contrast(${settings.contrast}%) saturate(${settings.saturation}%)`;b.drawImage(original,0,0,base.width,base.height);b.filter='none';ctx.clearRect(0,0,canvas.width,canvas.height);
+ const bg=document.createElement('canvas');bg.width=canvas.width;bg.height=canvas.height;const g=bg.getContext('2d');g.filter=`blur(${blur}px)`;g.drawImage(base,0,0);g.filter='none';
+ ctx.drawImage(bg,0,0);ctx.save();ctx.globalCompositeOperation='destination-in';ctx.drawImage(autoMask,0,0,canvas.width,canvas.height);ctx.restore();
+ // Rebuild with foreground cutout on top of the blurred background.
+ const out=document.createElement('canvas');out.width=canvas.width;out.height=canvas.height;const o=out.getContext('2d');o.drawImage(bg,0,0);o.drawImage(base,0,0);o.globalCompositeOperation='destination-in';o.drawImage(autoMask,0,0,canvas.width,canvas.height);o.globalCompositeOperation='destination-over';o.drawImage(bg,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(out,0,0);
+}
+function rerender(){if(!original||showingOriginal)return;if(currentMode==='auto')renderAuto();else renderManual();}
+$('applyManual').onclick=()=>{setTab('manual');renderManual();status('Manual blur applied. Adjust the slider to refine it.','good');};
+$('applyAuto').onclick=async()=>{if(!original){status('Upload a photo first.','warn');return;}if(!window.SelfieSegmentation){status('Automatic model could not load. Check your internet connection and refresh the page.','warn');return;}status('Detecting the person… please wait.');try{if(!segmentation){segmentation=new SelfieSegmentation({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/${file}`});segmentation.setOptions({modelSelection:1});segmentation.onResults(results=>{const m=document.createElement('canvas');m.width=canvas.width;m.height=canvas.height;const mctx=m.getContext('2d');mctx.drawImage(results.segmentationMask,0,0,m.width,m.height);const softness=+$('edge').value;if(softness>0){const soft=document.createElement('canvas');soft.width=m.width;soft.height=m.height;const s=soft.getContext('2d');s.filter=`blur(${softness}px)`;s.drawImage(m,0,0);s.filter='none';autoMask=soft;}else autoMask=m;renderAuto();status('Automatic portrait blur applied.','good');});}await segmentation.send({image:original});}catch(err){console.error(err);status('Could not detect the subject. Try another photo or use Manual mode.','warn');}};
+$('compare').onclick=()=>{if(!original)return;showingOriginal=!showingOriginal;$('compare').textContent=showingOriginal?'Show edited':'Show original';if(showingOriginal)renderOriginal();else rerender();};
+$('download').onclick=()=>{if(!original)return;const a=document.createElement('a');a.download='photoedit-studio.png';a.href=canvas.toDataURL('image/png');a.click();};
+$('reset').onclick=()=>{if(!original)return;['brightness','contrast','saturation'].forEach(id=>$(id).value=100);$('autoBlur').value=14;$('manualBlur').value=8;$('edge').value=3;$('mode').value='whole';$('hdr').value=0;$('filter').value='none';settings={blur:14,edge:3,brightness:100,contrast:100,saturation:100};autoMask=null;showingOriginal=false;$('compare').textContent='Show original';renderOriginal();status('All edits reset.','good');};
+[['autoBlur','autoVal',' px'],['edge','edgeVal',''],['manualBlur','manualVal',' px'],['brightness','brightVal','%'],['contrast','contrastVal','%'],['saturation','satVal','%']].forEach(([id,val,suffix])=>$(id).addEventListener('input',()=>{$(val).textContent=$(id).value+suffix;if(id==='brightness')settings.brightness=+$(id).value;if(id==='contrast')settings.contrast=+$(id).value;if(id==='saturation')settings.saturation=+$(id).value;if(id==='autoBlur'||id==='edge')settings.blur=+$('autoBlur').value;if(!showingOriginal)rerender();}));
+$('mode').onchange=()=>{if(currentMode==='manual')renderManual();};
+
+function applyAIEnhance(){
+ if(!original){status('Upload a photo first.','warn');return;}
+ // Lightweight local image analysis: sample luminance to choose balanced correction.
+ const probe=document.createElement('canvas');probe.width=96;probe.height=96;
+ const p=probe.getContext('2d',{willReadFrequently:true});p.drawImage(original,0,0,96,96);
+ const data=p.getImageData(0,0,96,96).data;let sum=0,sumSq=0,n=0;
+ for(let i=0;i<data.length;i+=4){const y=.2126*data[i]+.7152*data[i+1]+.0722*data[i+2];sum+=y;sumSq+=y*y;n++;}
+ const mean=sum/n, variance=Math.max(0,sumSq/n-mean*mean), spread=Math.sqrt(variance);
+ const bright=Math.max(88,Math.min(118,Math.round(100+(118-mean)*.22)));
+ const contrast=Math.max(96,Math.min(125,Math.round(100+(48-spread)*.35)));
+ const sat=Math.max(100,Math.min(118,Math.round(108+(55-spread)*.12)));
+ $('brightness').value=bright;$('contrast').value=contrast;$('saturation').value=sat;$('hdr').value=22;
+ settings.brightness=bright;settings.contrast=contrast;settings.saturation=sat;
+ $('brightVal').textContent=bright+'%';$('contrastVal').textContent=contrast+'%';$('satVal').textContent=sat+'%';$('hdrVal').textContent='22';
+ $('filter').value='vivid';showingOriginal=false;$('compare').textContent='Show original';rerender();
+ status('AI-style auto enhancement applied using local image analysis.','good');
+}
+$('autoEnhance').onclick=applyAIEnhance;
+$('resetEnhance').onclick=()=>{if(!original)return;['brightness','contrast','saturation'].forEach(id=>$(id).value=100);$('hdr').value=0;$('filter').value='none';settings.brightness=settings.contrast=settings.saturation=100;['brightVal','contrastVal','satVal'].forEach(id=>$(id).textContent='100%');$('hdrVal').textContent='0';rerender();status('Enhancement and filter reset.','good');};
+$('hdr').addEventListener('input',()=>{$('hdrVal').textContent=$('hdr').value;if(!showingOriginal)rerender();});
+$('filter').addEventListener('change',()=>{if(!showingOriginal)rerender();});
+
+</script>
+</body></html>
